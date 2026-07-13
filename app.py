@@ -1,4 +1,6 @@
 import os
+import time
+import threading
 import pandas as pd
 import requests
 import streamlit as st
@@ -27,8 +29,13 @@ h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; }
     color: #5A6B7E; margin: 28px 0 4px 0; }
 .section-sub { font-size: 12px; color: #5A6B7E; margin-bottom: 10px; }
 
+.nav-pill { background: #F1F4F2; color: #12213A; font-size: 12px; padding: 6px 14px;
+    border-radius: 20px; text-decoration: none; margin-right: 8px; display: inline-block;
+    margin-bottom: 8px; }
+.nav-pill:hover { background: #E3E8E5; }
+
 .verdict-box {
-    background: #FFFFFF; border: 1px solid #DDE2E0; border-top: 4px solid #C24632;
+    background: #FFFFFF; border: 1px solid #DDE2E0; border-top: 4px solid #2E7D6B;
     border-radius: 4px; padding: 24px 26px; margin: 10px 0 22px 0;
 }
 .verdict-box h3 { font-size: 22px; line-height: 1.3; margin-bottom: 8px; color:#12213A;}
@@ -55,6 +62,12 @@ h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; }
 .flag-period { font-size: 11px; color: #8A94A0; }
 .flag-value { font-size: 15px; font-weight: 700; }
 
+.progress-box { background: #F7F8F7; border-radius: 12px; padding: 16px 18px; margin-bottom: 20px; }
+.progress-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.spin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #2E7D6B;
+    border-top-color: transparent; display: inline-block; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .footer-note { text-align:center; font-family:'IBM Plex Mono', monospace; font-size:11px;
     color:#5A6B7E; letter-spacing:.06em; margin-top: 40px;}
 </style>
@@ -71,11 +84,74 @@ PLOTLY_LAYOUT = dict(
     margin=dict(l=0, r=10, t=10, b=10),
 )
 
+STEP_LABELS = [
+    "Data Interpreter — reading the numbers",
+    "Root Cause Analyst — generating hypotheses",
+    "Prioritization — ranking by impact × confidence",
+    "Play Designer — drafting recommendations",
+    "Compiler — assembling the report",
+]
+STEP_DURATIONS = [4, 8, 6, 8, 4]  # seconds; a simulated guide, not literal live telemetry
 
-def section(label, sub=None):
-    st.markdown(f'<div class="section-label">{label}</div>', unsafe_allow_html=True)
+
+def section(label, sub=None, anchor=None):
+    id_attr = f' id="{anchor}"' if anchor else ""
+    st.markdown(f'<div{id_attr} class="section-label">{label}</div>', unsafe_allow_html=True)
     if sub:
         st.markdown(f'<div class="section-sub">{sub}</div>', unsafe_allow_html=True)
+
+
+def render_progress(placeholder, active_index):
+    rows = []
+    for i, label in enumerate(STEP_LABELS):
+        if i < active_index:
+            icon = '<span style="color:#1baf7a;font-weight:700;">✓</span>'
+            color, weight = "#12213A", "400"
+        elif i == active_index:
+            icon = '<span class="spin-dot"></span>'
+            color, weight = "#12213A", "600"
+        else:
+            icon = '<span style="color:#B0B8C1;">○</span>'
+            color, weight = "#8A94A0", "400"
+        rows.append(
+            f'<div class="progress-row"><span style="width:16px;display:inline-block;">{icon}</span>'
+            f'<span style="font-size:13px;color:{color};font-weight:{weight}">{label}</span></div>'
+        )
+    placeholder.markdown(f'<div class="progress-box">{"".join(rows)}</div>', unsafe_allow_html=True)
+
+
+def run_diagnosis_with_progress(mode, stats_payload, context_note):
+    """Runs diagnose() on a background thread while animating a simulated
+    step-by-step progress trail in the main thread. The animation timing is
+    a rough guide, not literal live telemetry from n8n (the webhook is a
+    single request/response, not a streaming connection)."""
+    result_holder = {}
+
+    def _worker():
+        try:
+            result_holder["result"] = diagnose(mode, stats_payload, context_note)
+        except Exception as e:
+            result_holder["error"] = str(e)
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+
+    placeholder = st.empty()
+    step_idx, elapsed = 0, 0.0
+    tick = 0.4
+    while thread.is_alive():
+        render_progress(placeholder, min(step_idx, len(STEP_LABELS) - 1))
+        time.sleep(tick)
+        elapsed += tick
+        if step_idx < len(STEP_LABELS) - 1 and elapsed >= STEP_DURATIONS[step_idx]:
+            step_idx += 1
+            elapsed = 0.0
+    thread.join()
+    render_progress(placeholder, len(STEP_LABELS))
+    time.sleep(0.4)
+    placeholder.empty()
+
+    return result_holder
 
 
 st.title("\U0001F4CA Funnel Diagnostics")
@@ -161,8 +237,24 @@ except ValueError as e:
     st.error(str(e))
     st.stop()
 
+# ---------- Nav pills + reset ----------
+nav_items = [("Your data", "your-data")]
+if mode == "order_level":
+    nav_items.append(("Cohorts", "cohorts"))
+nav_items += [("Diagnosis", "diagnosis"), ("Plays", "plays")]
+
+nav_col, reset_col = st.columns([4, 1])
+with nav_col:
+    pills = "".join(f'<a class="nav-pill" href="#{anchor}">{label}</a>' for label, anchor in nav_items)
+    st.markdown(pills, unsafe_allow_html=True)
+with reset_col:
+    if st.button("↻ Reset", use_container_width=True):
+        for k in ["diagnosis", "pdf_url", "diagnosis_error", "last_run_key", "diagnosis_steps", "source"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+
 # ---------- 01 · Your data ----------
-section("01 · Your data")
+section("01 · Your data", anchor="your-data")
 
 if mode == "order_level":
     kc = st.columns(5)
@@ -237,7 +329,8 @@ if mode == "order_level":
         st.plotly_chart(fig, use_container_width=True)
 
     # ---------- 02 · Cohort retention ----------
-    section("02 · Cohort retention", "% of each monthly cohort still ordering, by month since acquisition")
+    section("02 · Cohort retention", "% of each monthly cohort still ordering, by month since acquisition",
+            anchor="cohorts")
     month_cols = [c for c in cohort_matrix.columns if c != "cohort_size"]
     heat_vals = cohort_matrix[month_cols].values
     fig2 = go.Figure(data=go.Heatmap(
@@ -316,29 +409,33 @@ if "diagnosis" not in st.session_state or st.session_state.get("last_run_key") !
     if not os.environ.get("N8N_WEBHOOK_URL"):
         st.session_state["diagnosis"] = None
         st.session_state["pdf_url"] = None
+        st.session_state["diagnosis_steps"] = None
         st.session_state["diagnosis_error"] = (
             "N8N_WEBHOOK_URL is not set. Add it as an environment variable to enable the AI diagnosis "
             "(the data above still works without it)."
         )
     else:
-        with st.spinner("Running the diagnosis workflow..."):
-            try:
-                result = diagnose(mode, stats_payload, context_note)
-                st.session_state["diagnosis"] = result.get("diagnosis")
-                st.session_state["pdf_url"] = result.get("pdf_url")
-                st.session_state["last_run_key"] = run_key
-                st.session_state["diagnosis_error"] = None
-            except Exception as e:
-                st.session_state["diagnosis"] = None
-                st.session_state["pdf_url"] = None
-                st.session_state["diagnosis_error"] = f"Diagnosis failed: {e}"
+        result_holder = run_diagnosis_with_progress(mode, stats_payload, context_note)
+        if "error" in result_holder:
+            st.session_state["diagnosis"] = None
+            st.session_state["pdf_url"] = None
+            st.session_state["diagnosis_steps"] = None
+            st.session_state["diagnosis_error"] = f"Diagnosis failed: {result_holder['error']}"
+        else:
+            result = result_holder.get("result", {})
+            st.session_state["diagnosis"] = result.get("diagnosis")
+            st.session_state["pdf_url"] = result.get("pdf_url")
+            st.session_state["diagnosis_steps"] = result.get("steps")
+            st.session_state["last_run_key"] = run_key
+            st.session_state["diagnosis_error"] = None
 
 diag = st.session_state.get("diagnosis")
 pdf_url = st.session_state.get("pdf_url")
+diag_steps = st.session_state.get("diagnosis_steps")
 diagnosis_error = st.session_state.get("diagnosis_error")
 
 # ---------- Diagnosis + Plays ----------
-section(diagnosis_section_label)
+section(diagnosis_section_label, anchor="diagnosis")
 
 if diagnosis_error:
     st.error(diagnosis_error)
@@ -350,6 +447,13 @@ if diag:
         <p>{diag.get('diagnosis_detail', '')}</p>
     </div>
     """, unsafe_allow_html=True)
+
+    if diag_steps:
+        with st.expander("How the AI got here — see each agent's reasoning"):
+            for step in diag_steps:
+                st.markdown(f"**{step.get('name', '')}**")
+                st.write(step.get("output", ""))
+                st.markdown("---")
 
     b = diag.get("benchmark", {})
     if b:
@@ -370,6 +474,7 @@ if diag:
         st.plotly_chart(fig, use_container_width=True)
 
     if diag.get("plays"):
+        st.markdown('<div id="plays"></div>', unsafe_allow_html=True)
         st.markdown("**Prescribed plays**" if mode == "order_level" else "**Recommended experiments**")
         for play in diag["plays"]:
             st.markdown(f"""
