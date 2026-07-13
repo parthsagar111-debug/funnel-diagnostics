@@ -14,7 +14,7 @@ from analytics import (
 from ai_diagnosis import diagnose
 from sample_data import generate as generate_sample, generate_snapshot as generate_snapshot_sample
 
-st.set_page_config(page_title="Funnel Diagnostics", page_icon="\U0001F4CA", layout="centered")
+st.set_page_config(page_title="Funnel Diagnostics", page_icon="\U0001F4CA", layout="wide")
 
 # ---------- Styling ----------
 st.markdown("""
@@ -25,14 +25,27 @@ html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
 h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; }
 .mono { font-family: 'IBM Plex Mono', monospace; }
 
+/* Constrain the wide layout to a comfortable max width instead of edge-to-edge */
+.block-container { max-width: 1100px; margin: 0 auto; padding-top: 2rem; }
+
+/* Hide default Streamlit chrome for a cleaner, more product-like feel */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+
 .section-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
     color: #5A6B7E; margin: 28px 0 4px 0; }
 .section-sub { font-size: 12px; color: #5A6B7E; margin-bottom: 10px; }
 
+.nav-bar { position: sticky; top: 0; z-index: 999; background: #FFFFFF;
+    padding: 10px 0; border-bottom: 1px solid #EDEFEE; margin-bottom: 8px; }
 .nav-pill { background: #F1F4F2; color: #12213A; font-size: 12px; padding: 6px 14px;
     border-radius: 20px; text-decoration: none; margin-right: 8px; display: inline-block;
-    margin-bottom: 8px; }
+    margin-bottom: 4px; }
 .nav-pill:hover { background: #E3E8E5; }
+
+.kpi-card { background: #F7F8F7; border-radius: 8px; padding: 14px 16px; }
+.kpi-label { font-size: 12px; color: #5A6B7E; }
+.kpi-value { font-size: 22px; font-weight: 600; color: #12213A; margin-top: 2px; }
 
 .verdict-box {
     background: #FFFFFF; border: 1px solid #DDE2E0; border-top: 4px solid #2E7D6B;
@@ -68,8 +81,22 @@ h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; }
     border-top-color: transparent; display: inline-block; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.hero-step { text-align: center; }
+.hero-step-num { width: 30px; height: 30px; border-radius: 50%; background: #E3EEEA; color: #1E6B52;
+    display: flex; align-items: center; justify-content: center; font-weight: 600; margin: 0 auto 8px; }
+.hero-step-title { font-size: 13px; font-weight: 600; color: #12213A; margin-bottom: 2px; }
+.hero-step-sub { font-size: 12px; color: #5A6B7E; }
+
+.mode-card { border-radius: 10px; padding: 14px 16px; font-size: 12px; color: #5A6B7E; }
+.mode-card.active { border: 2px solid #2E7D6B; }
+.mode-card.inactive { border: 1px solid #DDE2E0; }
+.mode-card-title { font-size: 14px; font-weight: 600; color: #12213A; margin-bottom: 2px; }
+
 .footer-note { text-align:center; font-family:'IBM Plex Mono', monospace; font-size:11px;
     color:#5A6B7E; letter-spacing:.06em; margin-top: 40px;}
+
+div.stButton > button[kind="primary"] { background-color: #2E7D6B; border-color: #2E7D6B; }
+div.stButton > button[kind="primary"]:hover { background-color: #256a5a; border-color: #256a5a; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -99,6 +126,19 @@ def section(label, sub=None, anchor=None):
     st.markdown(f'<div{id_attr} class="section-label">{label}</div>', unsafe_allow_html=True)
     if sub:
         st.markdown(f'<div class="section-sub">{sub}</div>', unsafe_allow_html=True)
+
+
+def kpi_row(items):
+    cards = "".join(
+        f'<div class="kpi-card"><div class="kpi-label">{label}</div>'
+        f'<div class="kpi-value">{value}</div></div>'
+        for label, value in items
+    )
+    st.markdown(
+        f'<div style="display:grid;grid-template-columns:repeat({len(items)},minmax(0,1fr));'
+        f'gap:12px;margin-bottom:20px;">{cards}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_progress(placeholder, active_index):
@@ -158,6 +198,25 @@ st.title("\U0001F4CA Funnel Diagnostics")
 st.caption("Upload funnel metrics → get a diagnosed leak + ranked recommendations. "
            "Math is computed deterministically; AI (a 5-agent chain in n8n) only interprets the numbers.")
 
+# ---------- Landing hero (only before anything has been loaded this session) ----------
+if "source" not in st.session_state:
+    hc1, hc2, hc3 = st.columns(3)
+    steps = [
+        ("1", "Upload your data", "Or try it instantly with sample data"),
+        ("2", "5 AI agents diagnose it", "Findings → causes → priorities → plays"),
+        ("3", "Get ranked plays + PDF", "Ready to share or act on"),
+    ]
+    for col, (num, title, sub) in zip([hc1, hc2, hc3], steps):
+        with col:
+            st.markdown(f"""
+            <div class="hero-step">
+                <div class="hero-step-num">{num}</div>
+                <div class="hero-step-title">{title}</div>
+                <div class="hero-step-sub">{sub}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    st.write("")
+
 # ---------- Mode selection ----------
 mode_label = st.radio(
     "What kind of data are you uploading?",
@@ -166,6 +225,26 @@ mode_label = st.radio(
          "Order-level: raw order history — unlocks cohort retention heatmap and lifecycle diagnosis.",
 )
 mode = "metrics_snapshot" if mode_label.startswith("Metrics snapshot") else "order_level"
+
+if "source" not in st.session_state:
+    mc1, mc2 = st.columns(2)
+    with mc1:
+        cls = "active" if mode == "metrics_snapshot" else "inactive"
+        st.markdown(f"""
+        <div class="mode-card {cls}">
+            <div class="mode-card-title">Metrics snapshot</div>
+            Have a number you already track — activation, conversion, anything — by date and segment? Start here.
+        </div>
+        """, unsafe_allow_html=True)
+    with mc2:
+        cls = "active" if mode == "order_level" else "inactive"
+        st.markdown(f"""
+        <div class="mode-card {cls}">
+            <div class="mode-card-title">Order-level data</div>
+            Have raw D2C order history? Unlocks cohort retention analysis.
+        </div>
+        """, unsafe_allow_html=True)
+    st.write("")
 
 # ---------- Input ----------
 col1, col2 = st.columns([3, 1])
@@ -181,7 +260,7 @@ with col1:
 with col2:
     st.write("")
     st.write("")
-    use_sample = st.button("▸ Load sample data", use_container_width=True)
+    use_sample = st.button("▸ Try with sample data", use_container_width=True, type="primary")
     _sample_preview = generate_snapshot_sample() if mode == "metrics_snapshot" else generate_sample()
     st.download_button(
         "⬇ Download sample CSV",
@@ -208,7 +287,7 @@ elif uploaded is not None:
         st.error(f"Couldn't read that file: {e}")
 
 if df_raw is None:
-    st.info("Upload a CSV or load sample data to run the diagnosis.")
+    st.info("Upload a CSV or try sample data to run the diagnosis.")
     st.stop()
 
 # ---------- Validate + compute (mode-specific) ----------
@@ -237,32 +316,35 @@ except ValueError as e:
     st.error(str(e))
     st.stop()
 
-# ---------- Nav pills + reset ----------
+# ---------- Sticky nav pills + reset ----------
 nav_items = [("Your data", "your-data")]
 if mode == "order_level":
     nav_items.append(("Cohorts", "cohorts"))
 nav_items += [("Diagnosis", "diagnosis"), ("Plays", "plays")]
 
+st.markdown('<div class="nav-bar">', unsafe_allow_html=True)
 nav_col, reset_col = st.columns([4, 1])
 with nav_col:
     pills = "".join(f'<a class="nav-pill" href="#{anchor}">{label}</a>' for label, anchor in nav_items)
     st.markdown(pills, unsafe_allow_html=True)
 with reset_col:
-    if st.button("↻ Reset", use_container_width=True):
+    if st.button("↻ Reset diagnosis", use_container_width=True):
         for k in ["diagnosis", "pdf_url", "diagnosis_error", "last_run_key", "diagnosis_steps", "source"]:
             st.session_state.pop(k, None)
         st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- 01 · Your data ----------
 section("01 · Your data", anchor="your-data")
 
 if mode == "order_level":
-    kc = st.columns(5)
-    kc[0].metric("Total orders", f"{stats['total_orders']:,}")
-    kc[1].metric("Customers", f"{stats['total_customers']:,}")
-    kc[2].metric("Repeat rate", f"{stats['repeat_rate_pct']}%")
-    kc[3].metric("Avg order value", f"{stats['avg_order_value']:,.0f}")
-    kc[4].metric("Date range", f"{stats['date_range']['start']} → {stats['date_range']['end']}")
+    kpi_row([
+        ("Total orders", f"{stats['total_orders']:,}"),
+        ("Customers", f"{stats['total_customers']:,}"),
+        ("Repeat rate", f"{stats['repeat_rate_pct']}%"),
+        ("Avg order value", f"{stats['avg_order_value']:,.0f}"),
+        ("Date range", f"{stats['date_range']['start']} → {stats['date_range']['end']}"),
+    ])
 
     if orders_trend and len(orders_trend["months"]) > 1:
         st.markdown("**Orders over time**")
@@ -276,7 +358,7 @@ if mode == "order_level":
                                   name="Repeat orders", mode="lines+markers",
                                   line=dict(color=CHART_COLORS["green"], width=2),
                                   fill="tozeroy", fillcolor="rgba(27,175,122,0.08)"))
-        fig.update_layout(**PLOTLY_LAYOUT, height=240,
+        fig.update_layout(**PLOTLY_LAYOUT, height=260,
                            legend=dict(orientation="h", y=1.15, x=0),
                            xaxis=dict(gridcolor=CHART_COLORS["grid"]),
                            yaxis=dict(gridcolor=CHART_COLORS["grid"]))
@@ -294,7 +376,7 @@ if mode == "order_level":
                 marker_color=CHART_COLORS["blue"],
                 text=[f"{ch[c]}%" for c in channels], textposition="outside",
             ))
-            fig.update_layout(**PLOTLY_LAYOUT, height=200,
+            fig.update_layout(**PLOTLY_LAYOUT, height=220,
                                xaxis=dict(visible=False), yaxis=dict(gridcolor=CHART_COLORS["grid"]))
             st.plotly_chart(fig, use_container_width=True)
     with dc2:
@@ -308,7 +390,7 @@ if mode == "order_level":
                 x=labels, y=values, marker_color=[CHART_COLORS["red"], CHART_COLORS["green"]],
                 text=[f"{v}%" for v in values], textposition="outside",
             ))
-            fig.update_layout(**PLOTLY_LAYOUT, height=200,
+            fig.update_layout(**PLOTLY_LAYOUT, height=220,
                                yaxis=dict(visible=False), xaxis=dict(gridcolor=CHART_COLORS["grid"]))
             st.plotly_chart(fig, use_container_width=True)
 
@@ -323,7 +405,7 @@ if mode == "order_level":
                               y=[loyal.get(c, 0) for c in categories], marker_color=CHART_COLORS["blue"]))
         fig.add_trace(go.Bar(name="One-time buyers", x=categories,
                               y=[onetime.get(c, 0) for c in categories], marker_color=CHART_COLORS["gray"]))
-        fig.update_layout(**PLOTLY_LAYOUT, height=240, barmode="group",
+        fig.update_layout(**PLOTLY_LAYOUT, height=260, barmode="group",
                            legend=dict(orientation="h", y=1.15, x=0),
                            yaxis=dict(gridcolor=CHART_COLORS["grid"]))
         st.plotly_chart(fig, use_container_width=True)
@@ -339,7 +421,7 @@ if mode == "order_level":
         text=[[f"{v:.0f}%" if pd.notna(v) else "" for v in row] for row in heat_vals],
         texttemplate="%{text}", hoverinfo="skip",
     ))
-    fig2.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=10),
+    fig2.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=10),
                         xaxis=dict(side="top"), plot_bgcolor="white", paper_bgcolor="white")
     st.plotly_chart(fig2, use_container_width=True)
     if cliff:
@@ -350,12 +432,13 @@ if mode == "order_level":
 
 else:  # metrics_snapshot
     flagged_count = sum(1 for f in funnel_findings if f["flagged"])
-    kc = st.columns(5)
-    kc[0].metric("Metrics tracked", df["metric_name"].nunique())
-    kc[1].metric("Segments", df["segment"].nunique())
-    kc[2].metric("Readings loaded", len(df))
-    kc[3].metric("Date range", f"{df['date'].min().date()} → {df['date'].max().date()}")
-    kc[4].metric("Flagged changes", flagged_count)
+    kpi_row([
+        ("Metrics tracked", df["metric_name"].nunique()),
+        ("Segments", df["segment"].nunique()),
+        ("Readings loaded", len(df)),
+        ("Date range", f"{df['date'].min().date()} → {df['date'].max().date()}"),
+        ("Flagged changes", flagged_count),
+    ])
 
     if metric_series:
         st.markdown("**Trends by metric**")
@@ -373,7 +456,7 @@ else:  # metrics_snapshot
                     fig.add_trace(go.Scatter(x=data["dates"], y=values, name=seg, mode="lines+markers",
                                               line=dict(color=palette[j % len(palette)], width=2),
                                               marker=dict(size=5)))
-                fig.update_layout(**PLOTLY_LAYOUT, height=160, showlegend=False,
+                fig.update_layout(**PLOTLY_LAYOUT, height=180, showlegend=False,
                                    xaxis=dict(gridcolor=CHART_COLORS["grid"], tickfont=dict(size=9)),
                                    yaxis=dict(gridcolor=CHART_COLORS["grid"], tickfont=dict(size=9)))
                 st.plotly_chart(fig, use_container_width=True)
