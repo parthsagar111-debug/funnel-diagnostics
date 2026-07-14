@@ -14,89 +14,87 @@ from analytics import (
 from ai_diagnosis import diagnose
 from sample_data import generate as generate_sample, generate_snapshot as generate_snapshot_sample
 
-st.set_page_config(page_title="Funnel Diagnostics", page_icon="\U0001F4CA", layout="wide")
+st.set_page_config(page_title="Funnel Diagnostics", page_icon="📊", layout="wide")
+
+ACCENT = "#2E7D6B"
+ACCENT_LIGHT = "#E3EEEA"
 
 # ---------- Styling ----------
-st.markdown("""
+st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
-h1, h2, h3 { font-family: 'Space Grotesk', sans-serif !important; }
-.mono { font-family: 'IBM Plex Mono', monospace; }
+html, body, [class*="css"]  {{ font-family: 'Inter', sans-serif; }}
+h1, h2, h3 {{ font-family: 'Space Grotesk', sans-serif !important; }}
 
-/* Constrain the wide layout to a comfortable max width instead of edge-to-edge */
-.block-container { max-width: 1100px; margin: 0 auto; padding-top: 2rem; }
+.block-container {{ max-width: 1080px; margin: 0 auto; padding-top: 2rem; padding-bottom: 3rem; }}
 
-/* Hide default Streamlit chrome for a cleaner, more product-like feel */
-#MainMenu { visibility: hidden; }
-footer { visibility: hidden; }
+#MainMenu {{ visibility: hidden; }}
+footer {{ visibility: hidden; }}
 
-.section-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-    color: #5A6B7E; margin: 28px 0 4px 0; }
-.section-sub { font-size: 12px; color: #5A6B7E; margin-bottom: 10px; }
+.section-label {{ font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: #5A6B7E; margin: 32px 0 4px 0; scroll-margin-top: 90px; }}
+.section-sub {{ font-size: 12px; color: #5A6B7E; margin-bottom: 12px; }}
 
-.nav-bar { position: sticky; top: 0; z-index: 999; background: #FFFFFF;
-    padding: 10px 0; border-bottom: 1px solid #EDEFEE; margin-bottom: 8px; }
-.nav-pill { background: #F1F4F2; color: #12213A; font-size: 12px; padding: 6px 14px;
-    border-radius: 20px; text-decoration: none; margin-right: 8px; display: inline-block;
-    margin-bottom: 4px; }
-.nav-pill:hover { background: #E3E8E5; }
+.nav-bar {{ position: sticky; top: 0; z-index: 999; background: #FFFFFF;
+    padding: 12px 0; border-bottom: 1px solid #EDEFEE; margin: 8px 0 4px 0; }}
+.nav-pill {{ background: #F1F4F2; color: #12213A; font-size: 12px; padding: 6px 14px;
+    border-radius: 20px; text-decoration: none; margin-right: 8px; display: inline-block; }}
+.nav-pill:hover {{ background: #E3E8E5; }}
 
-.kpi-card { background: #F7F8F7; border-radius: 8px; padding: 14px 16px; }
-.kpi-label { font-size: 12px; color: #5A6B7E; }
-.kpi-value { font-size: 22px; font-weight: 600; color: #12213A; margin-top: 2px; }
+.kpi-card {{ background: #F7F8F7; border-radius: 8px; padding: 14px 16px; height: 100%; }}
+.kpi-label {{ font-size: 12px; color: #5A6B7E; }}
+.kpi-value {{ font-size: 22px; font-weight: 600; color: #12213A; margin-top: 4px; }}
 
-.verdict-box {
-    background: #FFFFFF; border: 1px solid #DDE2E0; border-top: 4px solid #2E7D6B;
-    border-radius: 4px; padding: 24px 26px; margin: 10px 0 22px 0;
-}
-.verdict-box h3 { font-size: 22px; line-height: 1.3; margin-bottom: 8px; color:#12213A;}
-.verdict-box p { color: #5A6B7E; font-size: 14.5px; }
+.verdict-box {{
+    background: #FFFFFF; border: 1px solid #DDE2E0; border-top: 4px solid {ACCENT};
+    border-radius: 6px; padding: 24px 26px; margin: 10px 0 22px 0;
+}}
+.verdict-box h3 {{ font-size: 21px; line-height: 1.3; margin-bottom: 8px; color:#12213A; font-weight: 700;}}
+.verdict-box p {{ color: #5A6B7E; font-size: 14.5px; }}
 
-.play-card {
-    background: #FFFFFF; border: 1px solid #DDE2E0; border-radius: 4px;
+.play-card {{
+    background: #FFFFFF; border: 1px solid #DDE2E0; border-radius: 6px;
     padding: 18px 20px; margin-bottom: 12px;
-}
-.play-rank { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing:.1em;
-    color: #5A6B7E; text-transform: uppercase; }
-.play-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; margin: 4px 0;}
-.play-impact { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #2E7D6B; font-weight:600; margin-bottom:8px;}
-.play-kv { font-size: 13px; color: #5A6B7E; }
-.play-kv b { color: #12213A; }
-.play-copy { background: #F1F4F2; border-left: 3px solid #2E7D6B; padding: 8px 12px;
-    font-size: 12.5px; margin-top: 8px; border-radius: 0 3px 3px 0; }
-.copy-tag { font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
-    text-transform:uppercase; color:#5A6B7E; display:block; margin-bottom:3px;}
+}}
+.play-rank {{ font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing:.1em;
+    color: #5A6B7E; text-transform: uppercase; }}
+.play-title {{ font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; margin: 4px 0;}}
+.play-impact {{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: {ACCENT}; font-weight:600; margin-bottom:8px;}}
+.play-kv {{ font-size: 13px; color: #5A6B7E; }}
+.play-kv b {{ color: #12213A; }}
+.play-copy {{ background: #F1F4F2; border-left: 3px solid {ACCENT}; padding: 8px 12px;
+    font-size: 12.5px; margin-top: 8px; border-radius: 0 4px 4px 0; }}
+.copy-tag {{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:#5A6B7E; display:block; margin-bottom:3px;}}
 
-.flag-card { background: #F7F8F7; border-radius: 4px; padding: 10px 14px; margin-bottom: 8px;
-    display: flex; justify-content: space-between; align-items: center; }
-.flag-title { font-size: 13px; font-weight: 600; color: #12213A; }
-.flag-period { font-size: 11px; color: #8A94A0; }
-.flag-value { font-size: 15px; font-weight: 700; }
+.flag-card {{ background: #F7F8F7; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center; }}
+.flag-title {{ font-size: 13px; font-weight: 600; color: #12213A; }}
+.flag-period {{ font-size: 11px; color: #8A94A0; }}
+.flag-value {{ font-size: 15px; font-weight: 700; }}
 
-.progress-box { background: #F7F8F7; border-radius: 12px; padding: 16px 18px; margin-bottom: 20px; }
-.progress-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
-.spin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #2E7D6B;
-    border-top-color: transparent; display: inline-block; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.progress-box {{ background: #F7F8F7; border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; }}
+.progress-row {{ display: flex; align-items: center; gap: 10px; padding: 4px 0; }}
+.spin-dot {{ width: 14px; height: 14px; border-radius: 50%; border: 2px solid {ACCENT};
+    border-top-color: transparent; display: inline-block; animation: spin 0.8s linear infinite; }}
+@keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 
-.hero-step { text-align: center; }
-.hero-step-num { width: 30px; height: 30px; border-radius: 50%; background: #E3EEEA; color: #1E6B52;
-    display: flex; align-items: center; justify-content: center; font-weight: 600; margin: 0 auto 8px; }
-.hero-step-title { font-size: 13px; font-weight: 600; color: #12213A; margin-bottom: 2px; }
-.hero-step-sub { font-size: 12px; color: #5A6B7E; }
+.hero-row {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 12px 0 24px 0; }}
+.hero-step {{ text-align: center; }}
+.hero-step-num {{ width: 28px; height: 28px; border-radius: 50%; background: {ACCENT_LIGHT}; color: {ACCENT};
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;
+    margin: 0 auto 8px; }}
+.hero-step-title {{ font-size: 13px; font-weight: 600; color: #12213A; margin-bottom: 2px; }}
+.hero-step-sub {{ font-size: 12px; color: #5A6B7E; }}
 
-.mode-card { border-radius: 10px; padding: 14px 16px; font-size: 12px; color: #5A6B7E; }
-.mode-card.active { border: 2px solid #2E7D6B; }
-.mode-card.inactive { border: 1px solid #DDE2E0; }
-.mode-card-title { font-size: 14px; font-weight: 600; color: #12213A; margin-bottom: 2px; }
+.mode-caption {{ font-size: 12.5px; color: #5A6B7E; margin: 4px 0 18px 0; }}
 
-.footer-note { text-align:center; font-family:'IBM Plex Mono', monospace; font-size:11px;
-    color:#5A6B7E; letter-spacing:.06em; margin-top: 40px;}
+.footer-note {{ text-align:center; font-family:'IBM Plex Mono', monospace; font-size:11px;
+    color:#5A6B7E; letter-spacing:.06em; margin-top: 44px;}}
 
-div.stButton > button[kind="primary"] { background-color: #2E7D6B; border-color: #2E7D6B; }
-div.stButton > button[kind="primary"]:hover { background-color: #256a5a; border-color: #256a5a; }
+div.stButton > button[kind="primary"] {{ background-color: {ACCENT}; border-color: {ACCENT}; }}
+div.stButton > button[kind="primary"]:hover {{ background-color: #256a5a; border-color: #256a5a; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,6 +118,12 @@ STEP_LABELS = [
 ]
 STEP_DURATIONS = [4, 8, 6, 8, 4]  # seconds; a simulated guide, not literal live telemetry
 
+MODE_CAPTIONS = {
+    "metrics_snapshot": "Have a number you already track — activation, conversion, anything — by date "
+                         "and segment? Start here.",
+    "order_level": "Have raw D2C order history? Unlocks cohort retention analysis.",
+}
+
 
 def section(label, sub=None, anchor=None):
     id_attr = f' id="{anchor}"' if anchor else ""
@@ -129,23 +133,22 @@ def section(label, sub=None, anchor=None):
 
 
 def kpi_row(items):
-    cards = "".join(
-        f'<div class="kpi-card"><div class="kpi-label">{label}</div>'
-        f'<div class="kpi-value">{value}</div></div>'
-        for label, value in items
-    )
-    st.markdown(
-        f'<div style="display:grid;grid-template-columns:repeat({len(items)},minmax(0,1fr));'
-        f'gap:12px;margin-bottom:20px;">{cards}</div>',
-        unsafe_allow_html=True,
-    )
+    cols = st.columns(len(items), gap="small")
+    for col, (label, value) in zip(cols, items):
+        with col:
+            st.markdown(
+                f'<div class="kpi-card"><div class="kpi-label">{label}</div>'
+                f'<div class="kpi-value">{value}</div></div>',
+                unsafe_allow_html=True,
+            )
+    st.write("")
 
 
 def render_progress(placeholder, active_index):
     rows = []
     for i, label in enumerate(STEP_LABELS):
         if i < active_index:
-            icon = '<span style="color:#1baf7a;font-weight:700;">✓</span>'
+            icon = f'<span style="color:{ACCENT};font-weight:700;">✓</span>'
             color, weight = "#12213A", "400"
         elif i == active_index:
             icon = '<span class="spin-dot"></span>'
@@ -194,73 +197,53 @@ def run_diagnosis_with_progress(mode, stats_payload, context_note):
     return result_holder
 
 
-st.title("\U0001F4CA Funnel Diagnostics")
+# =====================================================================
+# HEADER
+# =====================================================================
+st.title("📊 Funnel Diagnostics")
 st.caption("Upload funnel metrics → get a diagnosed leak + ranked recommendations. "
            "Math is computed deterministically; AI (a 5-agent chain in n8n) only interprets the numbers.")
 
-# ---------- Landing hero (only before anything has been loaded this session) ----------
+# =====================================================================
+# LANDING HERO (only before anything has been loaded this session)
+# =====================================================================
 if "source" not in st.session_state:
-    hc1, hc2, hc3 = st.columns(3)
-    steps = [
-        ("1", "Upload your data", "Or try it instantly with sample data"),
-        ("2", "5 AI agents diagnose it", "Findings → causes → priorities → plays"),
-        ("3", "Get ranked plays + PDF", "Ready to share or act on"),
-    ]
-    for col, (num, title, sub) in zip([hc1, hc2, hc3], steps):
-        with col:
-            st.markdown(f"""
-            <div class="hero-step">
-                <div class="hero-step-num">{num}</div>
-                <div class="hero-step-title">{title}</div>
-                <div class="hero-step-sub">{sub}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    st.write("")
+    steps_html = "".join(
+        f'<div class="hero-step"><div class="hero-step-num">{num}</div>'
+        f'<div class="hero-step-title">{title}</div><div class="hero-step-sub">{sub}</div></div>'
+        for num, title, sub in [
+            ("1", "Upload your data", "Or try it instantly with sample data"),
+            ("2", "5 AI agents diagnose it", "Findings → causes → priorities → plays"),
+            ("3", "Get ranked plays + PDF", "Ready to share or act on"),
+        ]
+    )
+    st.markdown(f'<div class="hero-row">{steps_html}</div>', unsafe_allow_html=True)
+    st.divider()
 
-# ---------- Mode selection ----------
+# =====================================================================
+# INPUT — one column, stacked, consistent widget types per row
+# =====================================================================
+st.markdown("**What kind of data are you uploading?**")
 mode_label = st.radio(
-    "What kind of data are you uploading?",
-    ["Metrics snapshot (any funnel metric)", "Order-level data (D2C orders)"],
-    help="Metrics snapshot: pre-aggregated numbers by date/segment/metric — works for any funnel stage. "
-         "Order-level: raw order history — unlocks cohort retention heatmap and lifecycle diagnosis.",
+    "Data type", ["Metrics snapshot (any funnel metric)", "Order-level data (D2C orders)"],
+    horizontal=True, label_visibility="collapsed",
 )
 mode = "metrics_snapshot" if mode_label.startswith("Metrics snapshot") else "order_level"
+st.markdown(f'<div class="mode-caption">{MODE_CAPTIONS[mode]}</div>', unsafe_allow_html=True)
 
-if "source" not in st.session_state:
-    mc1, mc2 = st.columns(2)
-    with mc1:
-        cls = "active" if mode == "metrics_snapshot" else "inactive"
-        st.markdown(f"""
-        <div class="mode-card {cls}">
-            <div class="mode-card-title">Metrics snapshot</div>
-            Have a number you already track — activation, conversion, anything — by date and segment? Start here.
-        </div>
-        """, unsafe_allow_html=True)
-    with mc2:
-        cls = "active" if mode == "order_level" else "inactive"
-        st.markdown(f"""
-        <div class="mode-card {cls}">
-            <div class="mode-card-title">Order-level data</div>
-            Have raw D2C order history? Unlocks cohort retention analysis.
-        </div>
-        """, unsafe_allow_html=True)
-    st.write("")
+if mode == "metrics_snapshot":
+    uploaded = st.file_uploader("Upload metrics CSV", type=["csv"],
+                                 help="Required columns: date, segment, metric_name, value. "
+                                      "One row per date + segment + metric.")
+else:
+    uploaded = st.file_uploader("Upload orders CSV", type=["csv"],
+                                 help="Required columns: customer_id, order_date, order_value. "
+                                      "Optional: category, discount_used, channel")
 
-# ---------- Input ----------
-col1, col2 = st.columns([3, 1])
-with col1:
-    if mode == "metrics_snapshot":
-        uploaded = st.file_uploader("Upload metrics CSV", type=["csv"],
-                                     help="Required columns: date, segment, metric_name, value. "
-                                          "One row per date + segment + metric.")
-    else:
-        uploaded = st.file_uploader("Upload orders CSV", type=["csv"],
-                                     help="Required columns: customer_id, order_date, order_value. "
-                                          "Optional: category, discount_used, channel")
-with col2:
-    st.write("")
-    st.write("")
+bcol1, bcol2 = st.columns([2, 1])
+with bcol1:
     use_sample = st.button("▸ Try with sample data", use_container_width=True, type="primary")
+with bcol2:
     _sample_preview = generate_snapshot_sample() if mode == "metrics_snapshot" else generate_sample()
     st.download_button(
         "⬇ Download sample CSV",
@@ -290,7 +273,9 @@ if df_raw is None:
     st.info("Upload a CSV or try sample data to run the diagnosis.")
     st.stop()
 
-# ---------- Validate + compute (mode-specific) ----------
+# =====================================================================
+# VALIDATE + COMPUTE (mode-specific)
+# =====================================================================
 cohort_matrix = None
 cliff = None
 funnel_findings = None
@@ -316,7 +301,9 @@ except ValueError as e:
     st.error(str(e))
     st.stop()
 
-# ---------- Sticky nav pills + reset ----------
+# =====================================================================
+# STICKY NAV
+# =====================================================================
 nav_items = [("Your data", "your-data")]
 if mode == "order_level":
     nav_items.append(("Cohorts", "cohorts"))
@@ -334,7 +321,9 @@ with reset_col:
         st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------- 01 · Your data ----------
+# =====================================================================
+# 01 · YOUR DATA
+# =====================================================================
 section("01 · Your data", anchor="your-data")
 
 if mode == "order_level":
@@ -410,14 +399,14 @@ if mode == "order_level":
                            yaxis=dict(gridcolor=CHART_COLORS["grid"]))
         st.plotly_chart(fig, use_container_width=True)
 
-    # ---------- 02 · Cohort retention ----------
+    # 02 · Cohort retention
     section("02 · Cohort retention", "% of each monthly cohort still ordering, by month since acquisition",
             anchor="cohorts")
     month_cols = [c for c in cohort_matrix.columns if c != "cohort_size"]
     heat_vals = cohort_matrix[month_cols].values
     fig2 = go.Figure(data=go.Heatmap(
         z=heat_vals, x=[f"M{c}" for c in month_cols], y=cohort_matrix.index,
-        colorscale=[[0, "#EDF3F0"], [1, "#2E7D6B"]], showscale=False,
+        colorscale=[[0, "#EDF3F0"], [1, ACCENT]], showscale=False,
         text=[[f"{v:.0f}%" if pd.notna(v) else "" for v in row] for row in heat_vals],
         texttemplate="%{text}", hoverinfo="skip",
     ))
@@ -486,7 +475,9 @@ else:  # metrics_snapshot
 
     diagnosis_section_label = "02 · AI diagnosis"
 
-# ---------- AI Diagnosis (n8n webhook) ----------
+# =====================================================================
+# AI DIAGNOSIS (n8n webhook)
+# =====================================================================
 run_key = (mode, st.session_state.get("source"))
 if "diagnosis" not in st.session_state or st.session_state.get("last_run_key") != run_key:
     if not os.environ.get("N8N_WEBHOOK_URL"):
@@ -517,7 +508,6 @@ pdf_url = st.session_state.get("pdf_url")
 diag_steps = st.session_state.get("diagnosis_steps")
 diagnosis_error = st.session_state.get("diagnosis_error")
 
-# ---------- Diagnosis + Plays ----------
 section(diagnosis_section_label, anchor="diagnosis")
 
 if diagnosis_error:
@@ -547,7 +537,7 @@ if diag:
         })
         fig = go.Figure(go.Bar(
             x=bench_df["Value"], y=bench_df["Metric"], orientation="h",
-            marker_color=["#12213A", "#9AA8B5", "#2E7D6B"],
+            marker_color=["#12213A", "#9AA8B5", ACCENT],
             text=[f"{v}%" for v in bench_df["Value"]], textposition="outside",
         ))
         fig.update_layout(height=180, margin=dict(l=0, r=30, t=10, b=10),
@@ -557,7 +547,7 @@ if diag:
         st.plotly_chart(fig, use_container_width=True)
 
     if diag.get("plays"):
-        st.markdown('<div id="plays"></div>', unsafe_allow_html=True)
+        st.markdown('<div id="plays" class="section-label" style="margin-top:8px;"></div>', unsafe_allow_html=True)
         st.markdown("**Prescribed plays**" if mode == "order_level" else "**Recommended experiments**")
         for play in diag["plays"]:
             st.markdown(f"""
@@ -572,7 +562,9 @@ if diag:
             </div>
             """, unsafe_allow_html=True)
 
-# ---------- PDF download ----------
+# =====================================================================
+# PDF DOWNLOAD
+# =====================================================================
 if pdf_url:
     st.markdown("**Download report**")
     try:
